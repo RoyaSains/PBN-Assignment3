@@ -209,9 +209,6 @@ logLik(mod_12_a)*(-2)
 
 #Q3
 #HHTS####
-rm(list = ls())
-library(tidyverse)
-
 setwd("D:/01UPENN/COURSES/CPLN5050_PlanningByNumbers/Assignment3")
 hh <- read.csv("1_Household_Public.csv")
 per <- read.csv("2_Person_Public.csv")
@@ -229,11 +226,11 @@ trip_cleaned <- trip %>%
   filter(D_LOC_TYPE== 2) %>%
   filter(MODE_AGG == 2 | MODE_AGG == 3 | MODE_AGG == 5) %>%
   filter(TRIP_NUM == 1) %>%
-  mutate(MODE_AGG_NAME = as.factor(recode(MODE_AGG,
+  mutate(mode_cat = as.factor(recode(MODE_AGG,
                                           `2` = "Bike",
                                           `3` = "Car",
                                           `5` = "Transit"))) %>%
-  select("HH_ID", "PERSON_ID", "Model_TravTime")
+  select("HH_ID", "PERSON_ID", "Model_TravTime", "Model_TravDist", "mode_cat")
 
 #take person dataset
 #step 1. identify personal variables that might be associated with mode choice (be careful about the 988 value for race)
@@ -242,16 +239,66 @@ trip_cleaned <- trip %>%
 #step 4. select only the relevant variables
 
 per_cleaned <- per %>%
-  select("HH_ID", "PERSON_ID", "GEND", "AGECAT", "WK_STAT", "WK_MODE") %>%
-  filter(GEND != 99 | AGECAT != 98 | AGECAT != 99 | WK_STAT != 98 | WK_STAT != 99 | WK_MODE != 99)
-  
-  
+  select(HH_ID, PERSON_ID, GEND, AGECAT, EDUCA, WK_MODE, LIC) %>%
+  filter(!(GEND == 99 | AGECAT == 98 | AGECAT == 99 | EDUCA == 98 | EDUCA == 99 | WK_MODE == 9 | LIC == 98 | LIC == 99)) %>%
+  filter(complete.cases(.))
+per_cleaned <- per_cleaned %>%
+  mutate(GEND = case_when(
+      GEND == 1 ~ 0,
+      GEND == 2 ~ 1))
+per_cleaned <- per_cleaned %>%
+  mutate(AGECAT = recode(AGECAT,
+                    "4" = "UNDER 18YRS",
+                    "5" = "18 to 44YRS",
+                    "6" = "18 to 44YRS",
+                    "7" = "18 to 44YRS",
+                    "8" = "OVER 44YRS",
+                    "9" = "OVER 44YRS",
+                    "10" = "OVER 44YRS",
+                    "11" = "OVER 44YRS",
+                    "12" = "OVER 44YRS"))
+per_cleaned <- per_cleaned %>%
+  mutate(WK_MODE = as.factor(recode(WK_MODE,
+                                          `1` = "Car",
+                                          `2` = "Car",
+                                          `3` = "Transit",
+                                          `4` = "Transit",
+                                          `5` = "Other",
+                                          `6` = "Other",
+                                          `7` = "Other",
+                                          `8` = "Other")))
+per_cleaned <- per_cleaned %>%
+  mutate(EDUCA = as.factor(recode(EDUCA,
+                                    `1` = "Did Not Graduate",
+                                    `2` = "HSGrad",
+                                    `3` = "HSGrad",
+                                    `4` = "HSGrad",
+                                    `5` = "HSGrad",
+                                    `6` = "HSGrad",
+                                    `97` = "Other")))
 
 #take household dataset
 #step 1. identify household variables that might be associated with mode choice
 #step 2. for each variable, remove meaningless values
 #step 3. recode values to more sensible categories
 #step 4. select only the relevant variables
+
+hh_cleaned <- hh %>%
+  select(HH_ID, H_COUNTY, A_TYPE, HH_SIZE, HH_WORK, TOT_VEH, INCOME) %>%
+  filter(!(HH_SIZE == 98 | HH_SIZE == 99 | HH_WORK == 98 | HH_WORK == 99 | TOT_VEH == 98 | TOT_VEH == 99 | INCOME == 98 | INCOME == 99)) %>%
+  filter(complete.cases(.))
+hh_cleaned <- hh_cleaned %>%
+  mutate(INCOME = as.factor(recode(INCOME,
+                                    `1` = "Low",
+                                    `2` = "Low",
+                                    `3` = "Middle",
+                                    `4` = "Middle",
+                                    `5` = "Middle",
+                                    `6` = "Middle",
+                                    `7` = "High",
+                                    `8` = "High",
+                                    `9` = "High",
+                                    `10` = "High")))
 
 #joining trip dataset to person dataset
 #step 1. join trip, person, and household datasets
@@ -260,28 +307,35 @@ per_cleaned <- per %>%
 #if certain variable has lots of NAs and whether it would be reasonable to remove that variable altogether in order to
 #preserve sample size
 
+dat <- merge(trip_cleaned, per_cleaned, by = "HH_ID", all.x = FALSE, all.y=FALSE, sort = FALSE) 
+dat <- merge(hh_cleaned, dat, by = "HH_ID", all.x = FALSE, all.y=FALSE, sort = FALSE)
+dat <- dat %>%
+  filter(Model_TravDist < 10,
+         Model_TravTime < 120)
+any(is.na(dat))
+
 #we will do the following in class####
 #calculating average speed for each mode
 ave.speed <- dat %>% group_by(mode_cat) %>%
-  summarise(ave_speed = mean(travel_dist/(travel_time/60)))
+  summarise(ave_speed = mean(Model_TravDist/(Model_TravTime/60)))
 
 #calculating travel time for alternative modes
 #need to do it one mode at a time
-dat.car <- dat %>% filter(mode_cat == "car")
-dat.transit <- dat %>% filter(mode_cat == "transit")
-dat.bike <- dat %>% filter(mode_cat == "bike")
+dat.car <- dat %>% filter(mode_cat == "Car")
+dat.transit <- dat %>% filter(mode_cat == "Transit")
+dat.bike <- dat %>% filter(mode_cat == "Bike")
 
-dat.car$time.car <- dat.car$travel_time
-dat.car$time.transit <- 60*(dat.car$travel_dist/ave.speed$ave_speed[2]) + 10 #add 10 minutes for waiting and walking to station
-dat.car$time.bike <- 60*(dat.car$travel_dist/ave.speed$ave_speed[3])
+dat.car$time.car <- dat.car$Model_TravTime
+dat.car$time.transit <- 60*(dat.car$Model_TravDist/ave.speed$ave_speed[3]) + 10
+dat.car$time.bike <- 60*(dat.car$Model_TravDist/ave.speed$ave_speed[1])
 
-dat.transit$time.transit <- dat.transit$travel_time + 10
-dat.transit$time.car <- 60*(dat.transit$travel_dist/ave.speed$ave_speed[1])
-dat.transit$time.bike <- 60*(dat.transit$travel_dist/ave.speed$ave_speed[3])
+dat.transit$time.transit <- dat.transit$Model_TravTime + 10
+dat.transit$time.car <- 60*(dat.transit$Model_TravDist/ave.speed$ave_speed[2])
+dat.transit$time.bike <- 60*(dat.transit$Model_TravDist/ave.speed$ave_speed[1])
 
-dat.bike$time.bike <- dat.bike$travel_time
-dat.bike$time.car <- 60*(dat.bike$travel_dist/ave.speed$ave_speed[1])
-dat.bike$time.transit <- 60*(dat.bike$travel_dist/ave.speed$ave_speed[2]) + 10
+dat.bike$time.bike <- dat.bike$Model_TravTime
+dat.bike$time.car <- 60*(dat.bike$Model_TravDist/ave.speed$ave_speed[2])
+dat.bike$time.transit <- 60*(dat.bike$Model_TravDist/ave.speed$ave_speed[3]) + 10
 
 #an overwhelming number of people drove
 #let's take a subset so that the mode split is more balanced
@@ -293,14 +347,14 @@ dat <- rbind.data.frame(dat.car, dat.transit, dat.bike)
 
 #calculating travel costs for alternative modes
 #Dept. of Energy est. $0.6/mile for driving
-dat$cost.car <- dat$travel_dist * 0.6 #+ dat$parking_cost #leave parking cost out for now
+dat$cost.car <- dat$Model_TravDist * 0.6 #+ dat$parking_cost #leave parking cost out for now
 
 #multiply 0.5 for non-monetary costs, add $2 for ticket
-dat$cost.transit <- dat$travel_dist * 0.5 + 2
+dat$cost.transit <- dat$Model_TravDist * 0.5 + 2
 
 #add $3 for non-monetary cost and wear and tear
 #Logan et al. (2023) #https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10546027/
-dat$cost.bike <- dat$travel_dist + 3 
+dat$cost.bike <- dat$Model_TravDist + 3 
 
 #shaping data into correct format
 library(mlogit)

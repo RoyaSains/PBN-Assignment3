@@ -3,6 +3,9 @@ rm(list = ls())
 library(haven)
 library(arm)
 library(tidyverse)
+library(car)
+library(plotfunctions)
+library(kableExtra)
 
 #Load voting file
 load("cpln505_assignment3_voting_data_abb.rda")
@@ -37,7 +40,9 @@ hist(dat_clean$party)
 hist(dat_clean$hispanic)
 hist(dat_clean$south)
 
+
 #Data Cleaning
+
 dat <- dat.voting %>%
   filter(VCF0004 == 2012 | VCF0004 == 2016) %>%
   rename(candidate = VCF0704a, 
@@ -53,7 +58,7 @@ dat <- dat.voting %>%
          party = VCF0302, 
          hispanic = VCF0108, 
          south = VCF0113) %>%
-  filter(age != 0, race != 9, candidate != 0, gender != 0, gender != 3, income != 0, religion != 0, education != 8, education != 9, class != 0, marital != 9, party != 0, hispanic != 8, hispanic != 9, south != 0) %>%
+  filter(age != 0, race != 9, candidate != 0, gender != 0, gender != 3, income != 0, religion != 0, education != 8, education != 9, class != 0, marital != 9, party != 0, class !=9, hispanic != 8, hispanic != 9, south != 0) %>%
   mutate(candidate = as.factor(recode(candidate,
                                       '1' = "democratic candidate",
                                       '2' = "republican candidate"))) %>%
@@ -79,13 +84,13 @@ dat <- dat.voting %>%
                                      `3` = "other",
                                      `4` = "other"))) %>%
   mutate(education = as.factor(recode(education,
-                                 `1` = "high school or less",
-                                 `2` = "high school or less",
-                                 `3` = "high school or less",
-                                 `4` = "some college",
-                                 `5` = "some college",
-                                 `6` = "grad", 
-                                 '7' = "grad"))) %>%
+                                 `1` = "no hs",
+                                 `2` = "no hs",
+                                 `3` = "hs",
+                                 `4` = "hs",
+                                 `5` = "college",
+                                 `6` = "college", 
+                                 '7' = "college"))) %>%
   mutate(marital = as.factor(recode(marital,                               
                                     `1` = "married",
                                     `2` = "unmarried",
@@ -99,8 +104,7 @@ dat <- dat.voting %>%
                                   `3` = "working",
                                   `4` = "middle",
                                   `5` = "middle",
-                                  `6` = "middle",
-                                  '9' = "other"))) %>%
+                                  `6` = "middle"))) %>%
   mutate(party = as.factor(recode(party,
                                   '1' = "republican",
                                   `2` = "other",
@@ -131,8 +135,17 @@ table(dat$party)
 table(dat$hispanic)
 table(dat$south)  
 
-hist(dat$age)
-plot(dat$candidate, dat$age)
+plot(dat$candidate, dat$race)
+plot(dat$candidate, dat$gender)
+plot(dat$candidate, dat$income)
+plot(dat$candidate, dat$religion)
+plot(dat$candidate, dat$education)
+plot(dat$candidate, dat$marital)
+plot(dat$candidate, dat$class)
+plot(dat$candidate, dat$party)
+plot(dat$candidate, dat$hispanic)
+plot(dat$candidate, dat$south)
+plot(dat$candidate, dat$gender)
 
 #Separating 2012 and 2016 data
   
@@ -155,7 +168,7 @@ summary_cats_2012 <- dat_2012_cats %>%
   group_by(Category) %>%
   mutate(Percentage = n / sum(n) * 100)
 
-write.csv(summary_cats_2012, "summary_cats_2012.csv")
+kable(summary_cats_2012)
 
 summary_cont_2012 <- dat_2012 %>%
   as_tibble() %>%
@@ -165,7 +178,7 @@ summary_cont_2012 <- dat_2012 %>%
                names_to = c(".value", "variable"),
                names_pattern = "(.*)_(.*)")
 
-write.csv(summary_cont_2012, "summary_cont_2012.csv")
+kable(summary_cont_2012)
 
 dat_2016_cats <- dat_2016 %>%
   select(-age)
@@ -176,7 +189,7 @@ summary_cats_2016 <- dat_2016_cats %>%
   group_by(Category) %>%
   mutate(Percentage = n / sum(n) * 100)
 
-write.csv(summary_cats_2016, "summary_cats_2016.csv")
+kable(summary_cats_2016)
 
 summary_cont_2016 <- dat_2016 %>%
   as_tibble() %>%
@@ -186,25 +199,80 @@ summary_cont_2016 <- dat_2016 %>%
                names_to = c(".value", "variable"),
                names_pattern = "(.*)_(.*)")
 
-write.csv(summary_cont_2016, "summary_cont_2016.csv")
+kable(summary_cont_2016)
 
 # Data Exploration
 
-plot(dat_2012$candidate, dat_2012$age)
+par(mfrow = c(1, 2)) 
 
+plot(dat_2012$candidate, dat_2012$age)
 plot(dat_2016$candidate, dat_2016$age)
 
-#Q2
+plot(dat_2012$candidate, dat_2012$income)
+plot(dat_2016$candidate, dat_2016$income)
+
+plot(dat_2012$candidate, dat_2012$religion)
+plot(dat_2016$candidate, dat_2016$religion)
+
+plot(dat_2012$candidate, dat_2012$race)
+plot(dat_2016$candidate, dat_2016$race)
+
+# Set ref category
+
+dat_2012$candidate <- relevel(dat_2012$candidate, ref = "democratic candidate")
+dat_2016$candidate <- relevel(dat_2016$candidate, ref = "democratic candidate")
+
 # Model building
 
 mod_12_a <- glm(candidate ~ race + age + gender + income,
-                data = dat, 
+                data = dat_2012, 
                 na.action = na.exclude, 
                 family = binomial("logit"))
 
 summary(mod_12_a)
 100*(exp(mod_12_a$coefficients) - 1)
 logLik(mod_12_a)*(-2)
+
+mod_12_b <- glm(candidate ~ race + age + gender + class,
+                data = dat_2012, 
+                na.action = na.exclude, 
+                family = binomial("logit"))
+
+summary(mod_12_b)
+100*(exp(mod_12_a$coefficients) - 1)
+logLik(mod_12_a)*(-2)
+
+
+mod_12_c <- glm(candidate ~ race + gender + hispanic + south + party, 
+                data = dat_2012, 
+                na.action = na.exclude, 
+                family = binomial("logit"))
+
+summary(mod_12_c)
+100*(exp(mod_12_c$coefficients) - 1)
+logLik(mod_12_c)*(-2)
+
+mod_12_d <- glm(candidate ~ race + gender + age + education + hispanic + south + party, 
+                data = dat_2012, 
+                na.action = na.exclude, 
+                family = binomial("logit"))
+
+summary(mod_12_d)
+100*(exp(mod_12_d$coefficients) - 1)
+logLik(mod_12_d)*(-2)
+vif(mod_12_d)
+
+
+mod_16_c <- glm(candidate ~ race + gender + hispanic + south + party, 
+                data = dat_2016, 
+                na.action = na.exclude, 
+                family = binomial("logit"))
+
+summary(mod_16_c)
+100*(exp(mod_16_c$coefficients) - 1)
+logLik(mod_16_c)*(-2)
+
+anova(mod_12_b, mod_12_c)
 
 
 #Q3

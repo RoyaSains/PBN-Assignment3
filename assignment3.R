@@ -1,5 +1,325 @@
 rm(list = ls())
 
+library(haven)
+library(arm)
+library(tidyverse)
+library(car)
+library(plotfunctions)
+library(kableExtra)
+library(dplyr)
+library(stargazer)
+
+#Load voting file
+load("cpln505_assignment3_voting_data_abb.rda")
+
+#Create 
+
+dat_clean <- dat.voting %>%
+  filter(VCF0004 == 2012 | VCF0004 == 2016) %>%
+  rename(candidate = VCF0704a, 
+         year = VCF0004, 
+         race = VCF0105a, 
+         age = VCF0101, 
+         gender = VCF0104, 
+         income = VCF0114, 
+         religion = VCF0128, 
+         education = VCF0140a, 
+         marital = VCF0147, 
+         class = VCF0148a, 
+         party = VCF0302, 
+         hispanic = VCF0108, 
+         south = VCF0113)
+
+# Histograms were created to understand the distribution of variable categories to be able to clean and recategorize the data
+
+hist(dat_clean$race)
+hist(dat_clean$age)
+hist(dat_clean$gender)
+hist(dat_clean$income)
+hist(dat_clean$religion)
+hist(dat_clean$education)
+hist(dat_clean$marital)
+hist(dat_clean$class)
+hist(dat_clean$party)
+hist(dat_clean$hispanic)
+hist(dat_clean$south)
+hist(dat_clean$age)
+
+# The variables were recategorized to better suit a logistical regression model. Yet to write about each variable 
+
+dat <- dat.voting %>%
+  filter(VCF0004 == 2012 | VCF0004 == 2016) %>%
+  rename(candidate = VCF0704a, 
+         year = VCF0004, 
+         race = VCF0105a, 
+         age = VCF0101, 
+         gender = VCF0104, 
+         income = VCF0114, 
+         religion = VCF0128, 
+         education = VCF0140a, 
+         marital = VCF0147, 
+         class = VCF0148a, 
+         party = VCF0302, 
+         hispanic = VCF0108, 
+         south = VCF0113) %>%
+  filter(age != 0, race != 9, candidate != 0, gender != 0, gender != 3, income != 0, religion != 0, education != 8, education != 9, class != 0, marital != 9, party != 0, class !=9, hispanic != 8, hispanic != 9, south != 0) %>%
+  mutate(candidate = as.factor(case_when(
+    candidate == "1" ~ "democrat",
+    candidate == "2" ~ "republican",
+    TRUE ~ as.character(candidate)
+  ))) %>%
+  mutate(race = as.factor(case_when(
+    race == 1 ~ "white",
+    race == 2 ~ "black",
+    TRUE ~ "other"
+  ))) %>%
+  mutate(age = as.factor(case_when(
+    age >= 17 & age < 35 ~ "youth",
+    age >= 35 & age < 65 ~ "middle age",
+    age >= 65 ~ "retirees"
+  ))) %>%
+  mutate(gender = as.factor(case_when(
+    gender == 1 ~ "male",
+    gender == 2 ~ "female",
+    TRUE ~ "other"
+  ))) %>%
+  mutate(income = as.factor(case_when(
+    income %in% c(1, 2) ~ "low",
+    income == 3 ~ "middle",
+    income %in% c(4, 5) ~ "high",
+    TRUE ~ "other"
+  ))) %>%
+  mutate(religion = as.factor(case_when(
+    religion == 1 ~ "protestant",
+    religion == 2 ~ "catholic",
+    TRUE ~ "other"
+  ))) %>%
+  mutate(education = as.factor(case_when(
+    education %in% c(1, 2) ~ "no hs",
+    education %in% c(3, 4) ~ "hs",
+    education %in% c(5, 6, 7) ~ "college",
+    TRUE ~ "other"
+  ))) %>%
+  mutate(marital = as.factor(case_when(
+    marital == 1 ~ "married",
+    TRUE ~ "unmarried"
+  ))) %>%
+  mutate(class = as.factor(case_when(
+    class %in% c(1, 2, 3) ~ "working",
+    class %in% c(4, 5, 6) ~ "middle",
+    TRUE ~ "other"
+  ))) %>%
+  mutate(party = as.factor(case_when(
+    party == 1 ~ "republican",
+    party == 5 ~ "democrat",
+    TRUE ~ "other"
+  ))) %>%
+  mutate(hispanic = as.factor(case_when(
+    hispanic == 1 ~ "hispanic",
+    TRUE ~ "non-hispanic"
+  ))) %>%
+  mutate(south = as.factor(case_when(
+    south == 1 ~ "south",
+    TRUE ~ "non-south"
+  )))
+
+# Checking the new categories 
+  
+table(dat$candidate)
+table(dat$race)
+table(dat$age)
+table(dat$gender)
+table(dat$income)
+table(dat$religion)
+table(dat$education)
+table(dat$marital)
+table(dat$class)
+table(dat$party)
+table(dat$hispanic)
+table(dat$south)  
+
+#Separating 2012 and 2016 data
+  
+dat_2012 <- dat %>%
+  filter(year == 2012) %>%
+  select(-year)
+
+dat_2016 <- dat %>%
+  filter(year == 2016) %>%
+  select(-year)
+
+# Summarising each variable for 2012 and 2016
+
+summary_cats_2012 <- dat_2012 %>%
+  pivot_longer(cols = everything(), names_to = "Category", values_to = "Value") %>%
+  count(Category, Value) %>%
+  group_by(Category) %>%
+  mutate(Percentage = n / sum(n) * 100)
+
+kable(summary_cats_2012)
+
+summary_cats_2016 <- dat_2016 %>%
+  pivot_longer(cols = everything(), names_to = "Category", values_to = "Value") %>%
+  count(Category, Value) %>%
+  group_by(Category) %>%
+  mutate(Percentage = n / sum(n) * 100)
+
+kable(summary_cats_2016)
+
+# Exploring distribution of categories for 2012 and 2016
+
+par(mfrow = c(1, 2))
+
+plot(dat_2012$candidate) 
+plot(dat_2016$candidate)
+
+
+plot(dat_2012$candidate, dat_2012$race, main = "Race Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$race, main = "Race Distribution in 2016", xlab = "", ylab = "")
+
+
+plot(dat_2012$race, dat_2012$candidate, main = "Race Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$race, dat_2016$candidate, main = "Race Distribution in 2016", xlab = "", ylab = "")
+
+
+plot(dat_2012$candidate, dat_2012$age, main = "Age Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$age, main = "Age Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$age, dat_2012$candidate, main = "Age Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$age, dat_2016$candidate, main = "Age Distribution in 2016", xlab = "", ylab = "")
+
+
+plot(dat_2012$candidate, dat_2012$gender, main = "Age Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$gender, main = "Age Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$gender, dat_2012$candidate, main = "Age Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$gender, dat_2016$candidate, main = "Age Distribution in 2016", xlab = "", ylab = "")
+
+
+plot(dat_2012$candidate, dat_2012$income, main = "Income Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$income, main = "Income Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$income, dat_2012$candidate, main = "Income Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$income, dat_2016$candidate, main = "Income Distribution in 2016", xlab = "", ylab = "")
+
+
+plot(dat_2012$candidate, dat_2012$religion, main = "Religion Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$religion, main = "Religion Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$candidate, dat_2012$education, main = "Education Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$education, main = "Education Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$education, dat_2012$candidate, main = "Education Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$education, dat_2016$candidate, main = "Education Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$candidate, dat_2012$marital, main = "Marital Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$marital, main = "Marital Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$candidate, dat_2012$class, main = "Class Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$class, main = "Class Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$class, dat_2012$candidate, main = "Class Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$class, dat_2016$candidate, main = "Class Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$candidate, dat_2012$party, main = "Party Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$party, main = "Party Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$party, dat_2012$candidate, main = "Party Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$party, dat_2016$candidate, main = "Party Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$candidate, dat_2012$hispanic, main = "Hispanic Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$hispanic, main = "Hispanic Distribution in 2016", xlab = "", ylab = "")
+
+plot(dat_2012$candidate, dat_2012$south, main = "South Distribution in 2012", xlab = "", ylab = "")
+plot(dat_2016$candidate, dat_2016$south, main = "South Distribution in 2016", xlab = "", ylab = "")
+
+# Setting reference categories for the binomial logistical regression analysis
+
+dat_2012$candidate <- relevel(dat_2012$candidate, ref = "democratic candidate")
+dat_2016$candidate <- relevel(dat_2016$candidate, ref = "democratic candidate")
+
+dat_2012$education <- relevel(dat_2012$education, ref = "hs")
+dat_2016$education <- relevel(dat_2016$education, ref = "hs")
+
+dat_2012$income <- relevel(dat_2012$income, ref = "middle")
+dat_2016$income <- relevel(dat_2016$income, ref = "middle")
+
+# Model building for 2012
+
+### Testing all variables
+
+mod_12_a <- glm(candidate ~ race + age + gender + income + religion + education + marital + class + party + hispanic + south,
+                data = dat_2012, 
+                na.action = na.exclude, 
+                family = binomial("logit"))
+summary(mod_12_a)
+
+### Income, Gender and Class are least significant variables in predicting a candidate.
+
+#Additive method Without interaction
+
+mod_12_b <- glm(candidate ~ race + age + religion + education + marital + party + hispanic + south,
+                data = dat_2012,
+                na.action = na.exclude, 
+                family = binomial("logit"))
+summary(mod_12_b)
+
+### Income, Gender and Class fell out as variables in the model building process.
+
+100*(exp(mod_12_b$coefficients) - 1)
+logLik(mod_12_b)*(-2)
+
+#With interaction
+
+mod_12_c <- glm(candidate ~ age + education + marital + party + hispanic + south + race*religion,
+                data = dat_2012,
+                na.action = na.exclude, 
+                family = binomial("logit"))
+summary(mod_12_c)
+
+100*(exp(mod_12_c$coefficients) - 1)
+logLik(mod_12_c)*(-2)
+
+
+# Model building for 2016
+
+### Testing all variables
+
+mod_16_a <- glm(candidate ~ race + age + gender + income + religion + education + marital + class + party + hispanic + south,
+                data = dat_2016, 
+                na.action = na.exclude, 
+                family = binomial("logit"))
+summary(mod_16_a)
+
+### Remove gender and income
+### Remove marital
+
+mod_16_b <- glm(candidate ~ race + age + religion + education + class + party + hispanic + south,
+                data = dat_2016, 
+                na.action = na.exclude, 
+                family = binomial("logit"))
+summary(mod_16_b)
+
+100*(exp(mod_16_b$coefficients) - 1)
+logLik(mod_16_b)*(-2)
+
+### Try adding interaction
+
+mod_16_c <- glm(candidate ~ race + age + religion + education + class + party + hispanic + south + race*religion,
+                data = dat_2016, 
+                na.action = na.exclude, 
+                family = binomial("logit"))
+summary(mod_16_c)
+
+
+100*(exp(mod_16_c$coefficients) - 1)
+logLik(mod_16_c)*(-2)
+
+### Race*religion is opposite in 2016 and is not significant
+### Use mod_2016_b as final for now
+
+
+
 
 #Q3
 #HHTS####
